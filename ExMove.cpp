@@ -310,7 +310,7 @@ static void get_selection(MQDocument doc,MQScene scene,std::vector<MQSelectVerte
 
 	std::set<MQSelectVertex> tmp;
 
-	// オブジェクトの数だけ繰り返し
+	// for each objects
 	ObjectEnumerator objenum(doc);
 	for(MQObject obj = NULL; (obj = objenum.next()) != NULL;)
 	{
@@ -319,13 +319,13 @@ static void get_selection(MQDocument doc,MQScene scene,std::vector<MQSelectVerte
 
 		for(int f = 0; f < face_count; f++)
 		{
-			// 無効な面(頂点の参照数が0)ならパス
+			// pass through if it is invalid face (count of references to vertice = 0)
 			int ptcount = obj->GetFacePointCount(f);
 			if(ptcount == 0) continue;
 
 			obj->GetFacePointArray(f,indices);
 
-			// 面が選択されている
+			// selected is a face
 			if(doc->IsSelectFace(o,f))
 			{
 				for(int p = 0; p < ptcount; p++)
@@ -359,7 +359,7 @@ static void get_symmetry_vertices(MQDocument doc, std::vector<MQSelectVertex>& i
 	if(!s_editoption.Symmetry) return;
 
 	//float distance = s_editoption.SymmetryDistance * s_editoption.SymmetryDistance;
-	// なぜか0.0しか入ってこない。
+	// we get only 0.0. I don't know why. 
 	float distance = 1.0f;
 
 	for(std::vector<MQSelectVertex>::iterator it = in.begin(); it != in.end(); ++it)
@@ -431,7 +431,7 @@ static bool is_point_on_line_2d(const MQPoint& p, const MQPoint& t1, const MQPoi
 
 static void get_vertex_disignated_normal(MQDocument doc, const MQSelectVertex& vaddr, MQPoint* nout)
 {
-	// 法線検出
+	// detection of normal vector
 	std::vector<MQPoint> normals;
 
 	MQObject obj = doc->GetObject(vaddr.object);
@@ -458,10 +458,10 @@ static void get_vertex_disignated_normal(MQDocument doc, const MQSelectVertex& v
 	MQPoint& basenormal = normals[0];
 	size_t samplesize = normals.size();
 
-	// 両面を想定したnormalのスキップ
+	// skip normal that designed for "both sided" face
 	for(std::vector<MQPoint>::iterator it = normals.begin(); it != normals.end(); ++it)
 	{
-		// 真逆を探す
+		// search for a vector which has counter direction 
 		for(std::vector<MQPoint>::iterator it2 = normals.begin(); it2 != normals.end(); ++it2)
 		{
 			if(it2->norm() == 0) continue;
@@ -626,13 +626,13 @@ void ExMovePlugin::pick_target(MQDocument doc, MQScene scene, POINT& mousepos, M
 
 				float z;
 
-				// 自分の面を成す点が選択候補にある
+				// selection contains a vertex which creates this face  
 				if(picked_vertex.GetObjectIndex() == o)
 				{
 					for(int p = 0; p < pcount; p++) if(picked_vertex.GetVertexIndex() == vindices[p]) { pcount = 0;/* to continue outer loop */ break; }
 				}
 
-				 // 自分の辺を成す点を含む辺が選ばれている
+				// selection contains a vertex which creates this edge
 				if(picked_edge[0] == o) 
 				{
 					for(int p = 0; p < pcount; p++) if(picked_edge[1] == vindices[p] || picked_edge[2] == vindices[p]) { pcount = 0;/* do continue */ break; }
@@ -714,7 +714,7 @@ void ExMovePlugin::pick_target(MQDocument doc, MQScene scene, POINT& mousepos, M
 
 //---------------------------------------------------------------------------
 //  ExMovePlugin::Activate
-//    表示・非表示切り替え要求
+//    requests for switch visibility
 //---------------------------------------------------------------------------
 BOOL ExMovePlugin::Activate(MQDocument doc, BOOL flag)
 {
@@ -744,7 +744,7 @@ BOOL ExMovePlugin::Activate(MQDocument doc, BOOL flag)
 		RedrawAllScene();
 	}
 	
-	// そのままflagを返す
+	// just return flag untouched
 	return flag;
 }
 
@@ -752,13 +752,12 @@ BOOL ExMovePlugin::Activate(MQDocument doc, BOOL flag)
 
 //---------------------------------------------------------------------------
 //  ExMovePlugin::OnMouseMove
-//    マウスが移動したとき
 //---------------------------------------------------------------------------
 BOOL ExMovePlugin::OnMouseMove(MQDocument doc, MQScene scene, MOUSE_BUTTON_STATE& state)
 {
 	this->GetEditOption(s_editoption);
 
-	// カメラが移動していたら refresh_cache 一般的に適用可能なアイデアではない
+	// do refresh_cache if the camera is moved. this is a bit tricky
 	if(m_cache_last_camera_pos != scene->GetCameraPosition())	
 	{
 		refresh_cache(doc,scene);
@@ -768,41 +767,40 @@ BOOL ExMovePlugin::OnMouseMove(MQDocument doc, MQScene scene, MOUSE_BUTTON_STATE
 	MQSelectElement elmnew;
 	pick_target(doc,scene,state.MousePos,&elmnew);
 
-	// 前回と違う頂点上にカーソルがきた場合は再描画
+	// redraw if the cursor is on a different vertex of previous tick 
 	if(m_highlightedelement != elmnew)
 	{
 		m_highlightedelement = elmnew;
 		RedrawScene(scene);
 	}
 
-	// 独自処理を行ったが、標準動作も行わせるためFALSEを返す
+	// though we've done our own task, return FALSE for default one  
 	return FALSE;
 }
 
 //---------------------------------------------------------------------------
 //  ExMovePlugin::OnDraw
-//    描画時の処理
 //---------------------------------------------------------------------------
 void ExMovePlugin::OnDraw(MQDocument doc, MQScene scene, int width, int height)
 {
-	// 実はアクティブじゃなくても呼ばれてるので注意
+	// Notice : this is called even if we're not active
 
 	if(m_highlightedelement.IsEmpty()) return;
 
 	MQObject obj = doc->GetObject(m_highlightedelement.GetObjectIndex());
-	if (obj == NULL) return; // あり得ないはずだが、念のためNULLチェック
+	if (obj == NULL) return; // it must not be, but check it.
 
-	// 頂点をハイライト描画
+	// draw vertices highlighted 
 	switch(m_highlightedelement.GetType())
 	{
 	case SELEL_VERTEX:
 	{
-		// 頂点位置を計算
+		// calcurate position of vertices
 		MQPoint sp = scene->Convert3DToScreen(obj->GetVertex(m_highlightedelement.GetVertexIndex()));
 		sp.z = 0.00001f;
 		MQPoint newvp = scene->ConvertScreenTo3D(sp); 
 
-		// 描画オブジェクトを生成
+		// create drawing object
 		int vertex[1];
 		MQObject draw = CreateDrawingObject(doc, DRAW_OBJECT_POINT);
 		draw->SetColor(m_color_highlight);
@@ -869,7 +867,6 @@ void ExMovePlugin::OnDraw(MQDocument doc, MQScene scene, int width, int height)
 
 //---------------------------------------------------------------------------
 //  ExMovePlugin::OnLeftButtonDown
-//    左ボタンが押されたとき
 //---------------------------------------------------------------------------
 BOOL ExMovePlugin::OnLeftButtonDown(MQDocument doc, MQScene scene, MOUSE_BUTTON_STATE& state)
 {
@@ -883,17 +880,17 @@ BOOL ExMovePlugin::OnLeftButtonDown(MQDocument doc, MQScene scene, MOUSE_BUTTON_
 	m_togglereserve.Reset();
 	
 	if(elm.IsEmpty()) 
-	{// 何もクリックしなかった
+	{// clicked nothing
 		m_regional_select_mode = true;
 	}
 	else
-	{// 何かクリックした
+	{// clicked something
 		if(elm.IsSelected(doc))
-		{// セレクション内
+		{// in selection
 			m_togglereserve = elm;
 		}
 		else
-		{// セレクション外
+		{// out selection
 			if(state.Shift == FALSE)
 			{
 				doc->ClearSelect(MQDOC_CLEARSELECT_ALL);
@@ -923,11 +920,11 @@ BOOL ExMovePlugin::OnLeftButtonDown(MQDocument doc, MQScene scene, MOUSE_BUTTON_
 
 //---------------------------------------------------------------------------
 //  ExMovePlugin::OnLeftButtonMove
-//    左ボタンが押されながらマウスが移動したとき
+//    mouse moved while left button down
 //---------------------------------------------------------------------------
 BOOL ExMovePlugin::OnLeftButtonMove(MQDocument doc, MQScene scene, MOUSE_BUTTON_STATE& state)
 {
-	// region 選択モード
+	// region selection mode
 	if(m_regional_select_mode)
 	{
 		MQPoint mousepos((float)state.MousePos.x,(float)state.MousePos.y,0.0001f);
@@ -965,14 +962,14 @@ BOOL ExMovePlugin::OnLeftButtonMove(MQDocument doc, MQScene scene, MOUSE_BUTTON_
 		return TRUE;
 	}
 
-	// 頂点等ドラッグモード
+	// vertices(or something) dragging mode
 
 	if(m_selection.size() == 0) return TRUE;
 
-	// 移動済みチェック
+	// check moved
 	m_moved = true;
 
-	// 頂点マージ
+	// marge vertices
 	if(state.RButton)
 	{
 		if(marge_vertices(doc,scene) == TRUE)
@@ -984,7 +981,7 @@ BOOL ExMovePlugin::OnLeftButtonMove(MQDocument doc, MQScene scene, MOUSE_BUTTON_
 		}
 	}
 
-	// 単なる移動
+	// a standerd move
 	if(state.Alt == TRUE)
 	{
 		MQPoint current_scene_mouse = scene->ConvertScreenTo3D(MQPoint((float)state.MousePos.x, (float)state.MousePos.y, m_sc_dragbegin_z));
@@ -1012,12 +1009,12 @@ BOOL ExMovePlugin::OnLeftButtonMove(MQDocument doc, MQScene scene, MOUSE_BUTTON_
 		return TRUE;
 	}
 
-	// 法線移動 ////////////////////////////////
+	// normal aligned move ////////////////////////////////
 
-	// 初期処理
+	// initialization
 	if(m_normalmap.size() == 0)
 	{
-		// normalmap 作成
+		// normalmap creation
 		for(std::vector<MQSelectVertex>::iterator it = m_selection.begin(); it != m_selection.end(); ++it)
 		{
 			MQPoint n(0,0,0);
@@ -1088,7 +1085,7 @@ void ExMovePlugin::regional_select(MQDocument doc, MQScene scene, MOUSE_BUTTON_S
 
 		if(s_editoption.EditFace || s_editoption.EditLine)
 		{
-			// 両方が選択点の辺をさがす
+			// search a edge having both vertices are selected
 			std::vector< std::vector<int> >& edges = m_cache_edges[objenum.GetIndex()];
 
 			int fcount = obj->GetFaceCount();
@@ -1113,11 +1110,10 @@ void ExMovePlugin::regional_select(MQDocument doc, MQScene scene, MOUSE_BUTTON_S
 
 //---------------------------------------------------------------------------
 //  ExMovePlugin::OnLeftButtonUp
-//    左ボタンが離されたとき
 //---------------------------------------------------------------------------
 BOOL ExMovePlugin::OnLeftButtonUp(MQDocument doc, MQScene scene, MOUSE_BUTTON_STATE& state)
 {
-	//領域選択モード
+	// region selection mode
 	if(m_regional_select_mode)
 	{
 		regional_select(doc,scene,state);
@@ -1127,13 +1123,13 @@ BOOL ExMovePlugin::OnLeftButtonUp(MQDocument doc, MQScene scene, MOUSE_BUTTON_ST
 
 	if(m_moved)
 	{
-		// 頂点が移動された場合、再描画とアンドゥの更新を行う
+		// redraw and update undo if moved 
 		RedrawAllScene();
 		UpdateUndo();
 	}
 	else
 	{
-		// 動かさなかったときに選択済みをクリックしていたらトグルする
+		// if not moved, toggle selection
 		if(!m_togglereserve.IsEmpty())
 		{ 
 			if(m_togglereserve.IsSelected(doc) && state.Shift)
@@ -1144,7 +1140,7 @@ BOOL ExMovePlugin::OnLeftButtonUp(MQDocument doc, MQScene scene, MOUSE_BUTTON_ST
 	}
 
 
-	// 標準動作の代わりに独自処理を行ったのでTRUEを返す
+	// return TRUE, we do our own stuff and this should override default one
 	return TRUE;
 }
 
@@ -1211,7 +1207,7 @@ BOOL ExMovePlugin::marge_vertices(MQDocument doc, MQScene scene)
 
 //---------------------------------------------------------------------------
 //  GetPluginClass
-//    プラグインのベースクラスを返す
+//    returns base class of the plugin
 //---------------------------------------------------------------------------
 MQBasePlugin *GetPluginClass()
 {
